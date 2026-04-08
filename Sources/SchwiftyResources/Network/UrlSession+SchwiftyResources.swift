@@ -104,30 +104,17 @@ private enum AuthenticationChallengeHandler {
 
         let host = challenge.protectionSpace.host
 
-        // 1. Check the new ServerTrustRegistry first.
-        if let evaluator = ServerTrustRegistry.sharedInstance.evaluator(for: host) {
-            do {
-                let trusted = try evaluator.evaluate(serverTrust, for: host)
-                return trusted
-                    ? (.useCredential, URLCredential(trust: serverTrust))
-                    : (.cancelAuthenticationChallenge, nil)
-            } catch {
-                return (.cancelAuthenticationChallenge, nil)
-            }
+        guard let evaluator = ServerTrustRegistry.sharedInstance.evaluator(for: host) else {
+            return (.performDefaultHandling, nil)
         }
 
-        // 2. Fall back to legacy CertificatePinningRegistry for backward compatibility.
-        if let certificates = CertificatePinningRegistry.sharedInstance.registeredCertificates(for: host),
-           !certificates.isEmpty
-        {
-            let evaluator = CertificateServerTrustEvaluator(certificates: certificates)
-            let trusted = (try? evaluator.evaluate(serverTrust, for: host)) ?? false
+        do {
+            let trusted = try evaluator.evaluate(serverTrust, for: host)
             return trusted
                 ? (.useCredential, URLCredential(trust: serverTrust))
                 : (.cancelAuthenticationChallenge, nil)
+        } catch {
+            return (.cancelAuthenticationChallenge, nil)
         }
-
-        // 3. No pinning configured — use system default.
-        return (.performDefaultHandling, nil)
     }
 }

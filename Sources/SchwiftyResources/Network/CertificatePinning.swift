@@ -23,63 +23,40 @@
 
 import Foundation
 
-/// With this registry it is possible to register specific certificates for a given regular expression.
-/// Example: ".*\.huk-coburg\.cloud" will match "foo.huk-coburg.cloud" and "bar.huk-coburg.cloud"
-/// It is possible to register multiple certificates for one regular expression. All of the registered certificates will be evaluated.
-/// If the given certificate is not found or cannot be read, the evaluation will fail, because an entry for the regular expression was added.
-/// The certficate needs to be in the DER format.
-/// To convert a PEM to DER:
-/// openssl x509 -in certificate.pem -outform der -out certificate.der
-@available(*, deprecated, message: "Use ServerTrustRegistry with CertificateServerTrustEvaluator instead.")
 @CertificatePinningActor
-public final class CertificatePinningRegistry {
-    // MARK: - Private structs
+public final class ServerTrustRegistry {
+    public static let sharedInstance = ServerTrustRegistry()
 
-    private struct Entry {
-        let regex: Regex<AnyRegexOutput>
-        let certificate: SecCertificate?
-    }
-
-    // MARK: - Singleton
-
-    public static let sharedInstance = CertificatePinningRegistry()
-
-    // MARK: - Private properties
-
-    private var entries: [Entry] = []
-
-    // MARK: - Initialiser
+    private var entries: [(pattern: Regex<AnyRegexOutput>, evaluator: any ServerTrustEvaluating)] = []
 
     private init() {}
 
-    // MARK: - Public functions
-
-    public func registerCertificate(fileUrl: URL?, for regex: Regex<AnyRegexOutput>) {
-        var certificate: SecCertificate?
-
-        if let fileUrl = fileUrl,
-           let data = try? Data(contentsOf: fileUrl)
-        {
-            certificate = SecCertificateCreateWithData(nil, data as NSData)
-        }
-
-        entries.append(Entry(regex: regex, certificate: certificate))
+    /// Register a trust evaluator for hosts matching the given regex pattern.
+    ///
+    /// Evaluators are matched in registration order (first match wins).
+    /// Register more specific host patterns **before** broader catch-all patterns
+    /// to ensure correct matching. For example:
+    /// ```swift
+    /// // Specific first
+    /// registry.register(strictEvaluator, for: try! Regex("^api\\.example\\.com$"))
+    /// // Broad second
+    /// registry.register(defaultEvaluator, for: try! Regex(".*\\.example\\.com"))
+    /// ```
+    public func register(
+        _ evaluator: any ServerTrustEvaluating,
+        for pattern: Regex<AnyRegexOutput>
+    ) {
+        entries.append((pattern: pattern, evaluator: evaluator))
     }
 
-    public func registeredCertificates(for host: String) -> [SecCertificate]? {
-        let filteredEntries = entries.filter { entry in
-            host.firstMatch(of: entry.regex) != nil
-        }
-
-        guard filteredEntries.count > 0 else {
-            return nil
-        }
-
-        let certificates: [SecCertificate] = filteredEntries.compactMap { entry in
-            entry.certificate
-        }
-
-        return certificates
+    /// Returns the evaluator registered for the given host, or `nil` if none matches.
+    ///
+    /// Entries are evaluated in registration order and the **first** match wins.
+    /// Register more specific patterns before broader ones to ensure correct matching.
+    internal func evaluator(for host: String) -> (any ServerTrustEvaluating)? {
+        entries.first { entry in
+            host.firstMatch(of: entry.pattern) != nil
+        }?.evaluator
     }
 }
 

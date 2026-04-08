@@ -25,9 +25,6 @@ import Foundation
 
 /// Evaluates server trust by pinning DER-encoded certificates as anchor certificates.
 ///
-/// Provide the certificates at initialization, either directly or via the convenience
-/// initializer that looks them up from `CertificatePinningRegistry`.
-///
 /// Marked `@unchecked Sendable` because `SecCertificate` (a Core Foundation type) is
 /// immutable and thread-safe but not formally marked `Sendable` by the SDK.
 public struct CertificateServerTrustEvaluator: ServerTrustEvaluating {
@@ -36,14 +33,6 @@ public struct CertificateServerTrustEvaluator: ServerTrustEvaluating {
     /// Creates an evaluator that pins the given certificates.
     public init(certificates: [SecCertificate]) {
         self.certificates = certificates
-    }
-
-    /// Creates an evaluator using certificates currently registered in
-    /// `CertificatePinningRegistry` for the given host.
-    @CertificatePinningActor
-    @available(*, deprecated, message: "Use ServerTrustRegistry with CertificateServerTrustEvaluator(certificates:) instead.")
-    public init(for host: String) {
-        self.certificates = CertificatePinningRegistry.sharedInstance.registeredCertificates(for: host) ?? []
     }
 
     public func evaluate(_ serverTrust: SecTrust, for host: String) throws -> Bool {
