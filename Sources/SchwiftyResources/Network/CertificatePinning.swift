@@ -30,12 +30,13 @@ import Foundation
 /// The certficate needs to be in the DER format.
 /// To convert a PEM to DER:
 /// openssl x509 -in certificate.pem -outform der -out certificate.der
+@available(*, deprecated, message: "Use ServerTrustRegistry with CertificateServerTrustEvaluator instead.")
 @CertificatePinningActor
 public final class CertificatePinningRegistry {
     // MARK: - Private structs
 
     private struct Entry {
-        let regularExpression: NSRegularExpression
+        let regex: Regex<AnyRegexOutput>
         let certificate: SecCertificate?
     }
 
@@ -53,7 +54,7 @@ public final class CertificatePinningRegistry {
 
     // MARK: - Public functions
 
-    public func registerCertificate(fileUrl: URL?, for regularExpression: NSRegularExpression) {
+    public func registerCertificate(fileUrl: URL?, for regex: Regex<AnyRegexOutput>) {
         var certificate: SecCertificate?
 
         if let fileUrl = fileUrl,
@@ -62,13 +63,12 @@ public final class CertificatePinningRegistry {
             certificate = SecCertificateCreateWithData(nil, data as NSData)
         }
 
-        entries.append(Entry(regularExpression: regularExpression, certificate: certificate))
+        entries.append(Entry(regex: regex, certificate: certificate))
     }
 
     public func registeredCertificates(for host: String) -> [SecCertificate]? {
         let filteredEntries = entries.filter { entry in
-            let numberOfMatches = entry.regularExpression.numberOfMatches(in: host, range: NSRange(location: 0, length: host.count))
-            return numberOfMatches > 0
+            host.firstMatch(of: entry.regex) != nil
         }
 
         guard filteredEntries.count > 0 else {

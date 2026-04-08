@@ -97,25 +97,37 @@ private final class URLSessionTaskDelegateHandler: NSObject, URLSessionTaskDeleg
 private enum AuthenticationChallengeHandler {
     static func handle(_ challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              let serverTrust = challenge.protectionSpace.serverTrust,
-              let certificates = CertificatePinningRegistry.sharedInstance.registeredCertificates(for: challenge.protectionSpace.host)
+              let serverTrust = challenge.protectionSpace.serverTrust
         else {
             return (.performDefaultHandling, nil)
         }
 
-        let status = SecTrustSetAnchorCertificates(serverTrust, certificates as NSArray)
+        let host = challenge.protectionSpace.host
 
-        guard status == errSecSuccess else {
-            return (.cancelAuthenticationChallenge, nil)
+        // 1. Check the new ServerTrustRegistry first.
+        if let evaluator = ServerTrustRegistry.sharedInstance.evaluator(for: host) {
+            do {
+                let trusted = try evaluator.evaluate(serverTrust, for: host)
+                return trusted
+                    ? (.useCredential, URLCredential(trust: serverTrust))
+                    : (.cancelAuthenticationChallenge, nil)
+            } catch {
+                return (.cancelAuthenticationChallenge, nil)
+            }
         }
 
-        var error: CFError?
-        let isTrusted = SecTrustEvaluateWithError(serverTrust, &error)
-
-        guard isTrusted else {
-            return (.cancelAuthenticationChallenge, nil)
+        // 2. Fall back to legacy CertificatePinningRegistry for backward compatibility.
+        if let certificates = CertificatePinningRegistry.sharedInstance.registeredCertificates(for: host),
+           !certificates.isEmpty
+        {
+            let evaluator = CertificateServerTrustEvaluator(certificates: certificates)
+            let trusted = (try? evaluator.evaluate(serverTrust, for: host)) ?? false
+            return trusted
+                ? (.useCredential, URLCredential(trust: serverTrust))
+                : (.cancelAuthenticationChallenge, nil)
         }
 
-        return (.useCredential, URLCredential(trust: serverTrust))
+        // 3. No pinning configured — use system default.
+        return (.performDefaultHandling, nil)
     }
 }
