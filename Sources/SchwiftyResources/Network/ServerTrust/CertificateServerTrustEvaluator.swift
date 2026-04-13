@@ -25,7 +25,6 @@ import Foundation
 
 /// Evaluates server trust by pinning DER-encoded certificates as anchor certificates.
 ///
-/// Marked `@unchecked Sendable` because `SecCertificate` (a Core Foundation type) is
 /// immutable and thread-safe but not formally marked `Sendable` by the SDK.
 public struct CertificateServerTrustEvaluator: ServerTrustEvaluating {
     private let certificates: [SecCertificate]
