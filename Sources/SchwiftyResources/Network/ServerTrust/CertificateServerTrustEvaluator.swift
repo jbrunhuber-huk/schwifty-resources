@@ -27,7 +27,18 @@ import Foundation
 ///
 /// immutable and thread-safe but not formally marked `Sendable` by the SDK.
 public struct CertificateServerTrustEvaluator: ServerTrustEvaluating {
-    private let certificates: [SecCertificate]
+    /// Pinned anchor certificates.
+    ///
+    /// `nonisolated(unsafe)` opts this single stored property out of Swift 6's
+    /// Sendable checking. The vouch is safe because:
+    ///   * The property is `let` — it is never mutated after `init`.
+    ///   * `SecCertificate` instances are immutable once created and Apple documents
+    ///     them as safe for concurrent read access.
+    ///   * Recent SDKs mark `SecCertificate` as `Sendable`; on those toolchains
+    ///     the compiler will emit a "`nonisolated(unsafe)` is unnecessary" warning,
+    ///     which is expected. The annotation remains to support older SDKs where
+    ///     the conformance has not been backfilled.
+    private nonisolated(unsafe) let certificates: [SecCertificate]
 
     /// Creates an evaluator that pins the given certificates.
     public init(certificates: [SecCertificate]) {
