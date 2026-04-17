@@ -1,5 +1,5 @@
 //
-//  CertificatePinning.swift
+//  ServerTrustRegistry.swift
 //
 //  Copyright (c) 2023 HUK-COBURG
 //
