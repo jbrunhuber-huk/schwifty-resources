@@ -16,17 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    # Pin Xcode to a version that still ships XCTestCore.framework at
-    # …/Developer/Library/Frameworks/. Xcode 16.3+ removed it from that
-    # path, which breaks the Swift 6.0.3 OSS toolchain's `swift test`
-    # (dlopen of the test bundle fails with "Library not loaded:
-    # @rpath/XCTestCore.framework/Versions/A/XCTestCore").
     - uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: '16.2'
-    - uses: swift-actions/setup-swift@v2
-      with:
-        swift-version: "6.0"
+        xcode-version: '26.3'
     - name: Build
       run: swift build -v
     - name: Run tests
